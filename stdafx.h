@@ -16,3 +16,4 @@
 #include <stdlib.h>
 #include <WinSock2.h>
 #include <time.h>
+#include <WS2tcpip.h>
