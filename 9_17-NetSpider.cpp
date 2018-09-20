@@ -11,10 +11,9 @@
 
 int MainCommandLine(int , TCHAR **, TCHAR *);
 int MainAnlyURL(TCHAR *, StructURL *);
+int MainDomainToIp(StructURL *);
 int MainMakeRequestHead(StructURL *, char *);
 int MainConnectSendRecv(StructURL *, char *, StructStore *);
-int MainAnlyResponseHead(void);
-int MainGetResponseBody(void);
 
 /*其他函数声明*/
 int sendRecvSave(SOCKET, char *, StructStore *);			//
@@ -24,10 +23,15 @@ int _tmain(int argc, TCHAR **argv)
 {
 	/*函数内部变量*/
 	TCHAR URL[URLSIZE] = { NULL };
+	TCHAR msg_t[MSGSIZE] = { NULL };
 	PStructURL psu=(PStructURL)malloc(sizeof(StructURL));		//申请
 	PStructStore pss = (PStructStore)malloc(sizeof(StructStore));
 	char requestHead[MSG2048] = { NULL };
 	TCHAR fileName[FILEPATHSIZE] = { NULL };
+	char msg[MSGSIZE] = { NULL };
+	size_t returnValue = 0;
+	char ip[IPSIZE] = { NULL };
+	char port[PORTSIZE] = { NULL };
 
 	/*处理命令行参数*/
 	MainCommandLine(argc, argv, URL);
@@ -35,19 +39,35 @@ int _tmain(int argc, TCHAR **argv)
 	/*解析URL*/
 	MainAnlyURL(URL, psu);
 
+	/*查询域名，转为ip地址*/
+	MainDomainToIp(psu);
+
 	/*制作请求头*/
 	MainMakeRequestHead(psu, requestHead);
+
+	wcstombs_s(&returnValue, ip, _countof(ip), psu->ip, _countof(ip));
+	wcstombs_s(&returnValue, port, _countof(port), psu->port, _countof(port));
+	wcstombs_s(&returnValue, msg, _countof(msg), psu->dirPath, _countof(msg));
+	printf("main:\n");
+	for (int i = 0; i < 4; ++i) {
+		printf("%u\t", (UCHAR)ip[i]);
+	}
+	printf("\n");
+	printf("main:\n");
+	printf("%s\n", requestHead);
+	//释放
+	free(psu);
+	free(pss);
+	system("pause");
+	return 0;
 
 	/*连接，发送请求头，接收并分离出响应头和响应体*/
 	MainConnectSendRecv(psu, requestHead, pss);
 
-	/*解析响应头*/
-	MainAnlyResponseHead();
-
-	/*分离出响应体*/
-	MainGetResponseBody();
-
-	free(psu);													//释放
+	//释放
+	free(psu);
+	free(pss);
+	system("pause");
     return 0;
 }
 
@@ -58,26 +78,29 @@ int _tmain(int argc, TCHAR **argv)
 *作者：zmx
 *参数：argc:命令行参数个数，argv:命令行参数指针，URL:输出URL地址，'\0'结尾
 *功能：从命令行中提取关键信息，目前是URL提取
-*备注：
+*备注：二次修改时间：2018-9-20,修改内容：采用c语言自带函数进行宽字节转多字节
 */
 int MainCommandLine(int argc, TCHAR **argv, TCHAR *URL) {
 	/*内部变量*/
+	char msg[MSGSIZE] = { NULL };
+	size_t returnValue = 0;
 
 	/*...*/
 	switch (argc) {
-	case 0: {
-		_tprintf(_T("请输入URL参数\n"));
-	}break;
 	case 1: {
+		printf("请输入URL参数\n");
+	}break;
+	case 2: {
 		_stprintf_s(URL, URLSIZE, _T("%s"), argv[1]);
-		_tprintf(_T("参数1：%s\n"), argv[1]);
+		wcstombs_s(&returnValue, msg, _countof(msg), URL, _countof(msg));		//宽字节转多字节
+		printf("%s\n", msg);
 	}break;
 	default: {
-		_tprintf(_T("未定义参数\n"));
+		printf("未定义参数\n");
 	}
 	}
 
-	_tprintf(_T("命令行参数分析完毕\n"));
+	printf("命令行参数分析完毕\n");
 	return 0;
 }
 /*
@@ -85,17 +108,244 @@ int MainCommandLine(int argc, TCHAR **argv, TCHAR *URL) {
 *作者：zmx
 *参数：URL:接收URL字符串数组，'\0'结尾, psu:赋值结构体
 *功能：分析URL，赋值给结构体psu
-*备注：
+*备注：二次修改时间：2018-9-19，修改内容：1.增加提取各个部分的功能。2.
 */
 int MainAnlyURL(TCHAR *URL, StructURL *psu) {
 	/*内部变量*/
+	TCHAR msg_t[URLSIZE] = { NULL };
+	int coor_b = 0;							//关键字所在位置开始下标
+	int coor_e = 0;							//关键字所在位置结束下标
+	bool spec = FALSE;						//特殊情况标识
 
 	/*...*/
-	ZeroMemory(psu, sizeof(StructURL));
+	ZeroMemory(psu, sizeof(StructURL));		//初始化结构体内存
 
-	_tprintf(_T("URL分析完毕\n"));
+	/*提取协议部分*/
+	coor_b = 0;
+	coor_e = 0;
+	for (int i = 0; URL[i] != NULL; ++i) {
+		if (':' == URL[i] && '/' == URL[i + 1]) {		//判断依据：协议类型以://为分隔，http://www.baidu.com/
+			coor_e = i;
+			break;
+		}
+	}
+	if (coor_e != 0) {
+		for (int i = coor_b; i < coor_e; ++i) {
+			(psu->protocalType)[i] = URL[i];
+			if (i == coor_e - 1) {
+				(psu->protocalType)[i + 1] = '\0';
+			}
+		}
+	}
+	else {								//未找到，则默认为http
+		(psu->protocalType)[0] = 'h';
+		(psu->protocalType)[1] = 't';
+		(psu->protocalType)[2] = 't';
+		(psu->protocalType)[3] = 'p';
+		(psu->protocalType)[4] = '\0';
+	}
+	/*提取域名部分*/
+	coor_b = 0;
+	coor_e = 0;
+	for (int i = 0; URL[i] != '\0'; ++i) {
+		if ('/' == URL[i] && '/' == URL[i + 1]) {		//判断依据：域名部分以://为起始，':''/''\0'三种标识为结束，http://www.baidu.com/
+			coor_b = i + 2;
+			i = i + 1;
+			continue;
+		}
+		if (coor_b != 0) {
+			if (':' == URL[i] || '/' == URL[i]) {
+				coor_e = i;
+				break;
+			}
+			if ('\0' == URL[i + 1]) {
+				coor_e = i + 1;
+				break;
+			}
+		}
+	}
+	if (coor_e != 0) {
+		for (int i = coor_b; i < coor_e; ++i) {
+			(psu->domain)[i - coor_b] = URL[i];
+			if (i == coor_e - 1) {
+				(psu->domain)[i - coor_b + 1] = '\0';
+			}
+		}
+	}
+	else {
+		(psu->domain)[0] = '\0';
+	}
+	/*提取端口部分*/
+	coor_b = 0;
+	coor_e = 0;
+	for (int i = 0; URL[i] != '\0'; ++i) {
+		if (':' == URL[i] && URL[i + 1] != '/') {
+			coor_b = i + 1;
+			continue;
+		}
+		if (coor_b != 0) {
+			if ('/' == URL[i]) {
+				coor_e = i;
+				break;
+			}
+			if ('\0' == URL[i + 1]) {
+				coor_e = i + 1;
+				break;
+			}
+		}
+	}
+	if (coor_e != 0) {
+		for (int i = coor_b; i < coor_e; ++i) {
+			(psu->port)[i - coor_b] = URL[i];
+			if (i == coor_e - 1) {
+				(psu->port)[coor_e - coor_b] = '\0';
+			}
+		}
+	}
+	else {							//默认为80端口
+		(psu->port)[0] = '8';
+		(psu->port)[1] = '0';
+		(psu->port)[2] = '\0';
+	}
+	/*提取文件夹部分*/
+	coor_b = 0;
+	coor_e = 0;
+	spec = FALSE;
+	for (int i = 0; URL[i] != '\0'; ++i) {
+		if (0 == coor_b) {
+			if ('/' == URL[i] && '/' != URL[i + 1] && '/' != URL[i - 1]) {		//判断依据：文件夹部分以/为起始，'/'为结束，http://www.baidu.com/
+				coor_b = i + 1;
+				coor_e = i + 1;
+				continue;
+			}
+		}
+		else {
+			if ('/' == URL[i] && '/' != URL[i + 1]) {
+				coor_e = i;
+				continue;
+			}
+			if ('.' == URL[i] || '?' == URL[i] || '#' == URL[i]) {			//发现文件名部分, 参数部分， 锚部分，退出循环
+				break;
+			}
+			if ('\0' == URL[i + 1]) {
+				coor_e = i + 1;
+				spec = TRUE;			//特殊情况，当
+				break;
+			}
+		}
+	}
+	if (0 != coor_b) {
+		for (int i = coor_b; i <= coor_e; ++i) {
+			(psu->dirPath)[i - coor_b] = URL[i];
+			if (i == coor_e) {
+				if (TRUE == spec) {
+					(psu->dirPath)[i - coor_b] = '/';
+					(psu->dirPath)[i - coor_b + 1] = '\0';
+					spec = FALSE;
+				}
+				else {
+					(psu->dirPath)[i - coor_b] = '\0';
+				}
+			}
+		}
+	}
+	else {
+		(psu->dirPath)[0] = '\0';
+	}
+	/*提取文件名部分*/
+	coor_b = 0;
+	coor_e = 0;
+	for (int i = 0; URL[i] != '\0'; ++i) {
+		if ('/' == URL[i] && '/' != URL[i + 1]) {		//判断依据：文件名部分以/为起始, 带'.'，'?''#''\0'为结束，http://www.baidu.com/
+			coor_b = i + 1;
+			continue;
+		}
+		if (coor_b != 0) {
+			if ('?' == URL[i] || '#' == URL[i]) {
+				coor_e = i;
+				break;
+			}
+			if ('\0' == URL[i + 1]) {
+				coor_e = i + 1;
+				break;
+			}
+		}
+	}
+	if (coor_b != 0) {		
+		if (coor_e != 0) {
+			bool bfile = FALSE;
+			for (int i = coor_b; i < coor_e; ++i) {
+				(psu->file)[i - coor_b] = URL[i];
+				if ('.' == URL[i]) {
+					bfile = TRUE;
+				}
+				if (i == coor_e - 1) {
+					(psu->file)[i - coor_b + 1] = '\0';
+				}
+			}
+			if (FALSE == bfile) {
+				(psu->file)[0] = '\0';
+			}
+		}
+	}
+	else {					//未发现起始标识
+		(psu->file)[0] = '\0';
+	}
+
+	printf("URL分析完毕\n");
 	return 0;
 }
+
+/*
+*修改时间：2018-9-19
+*作者：zmx
+*参数： psu:赋值结构体
+*功能：查询域名，转为ip地址
+*备注：getaddrinfo()函数需要调用wsastartup()
+*		2.printf注意它本身的隐式转换，最好自己显示转换一下。printf("%u\t", (UCHAR)ip[i]);
+*/
+int MainDomainToIp(StructURL *psu) {
+	/*内部变量*/
+	TCHAR msg_t[MSGSIZE] = { NULL };
+	char domain[DOMAINSIZE] = { NULL };
+	char ip[IPSIZE] = { NULL };
+	char port[PORTSIZE] = { NULL };
+	char msg[MSGSIZE] = { NULL };
+	size_t returnValue = 0;
+	int iFuncStat = 0;
+	WORD sockVer = 0;
+	WSADATA wsadata = { NULL };
+	ADDRINFOA ai = { NULL };
+	PADDRINFOA pai = NULL;
+
+	/*...*/
+	sockVer = MAKEWORD(2, 2);
+	if (WSAStartup(sockVer, &wsadata) != 0) {
+		printf("WSAStartup启动失败：%d\n", WSAGetLastError());
+		system("pause");
+		exit(1);
+	}
+	wcstombs_s(&returnValue, domain, _countof(domain), psu->domain, _countof(domain));
+	wcstombs_s(&returnValue, port, _countof(port), psu->port, _countof(port));
+
+	ZeroMemory(&ai, sizeof(ai));
+	ai.ai_socktype = SOCK_STREAM;
+	ai.ai_family = AF_INET;
+	iFuncStat = getaddrinfo(domain, port, &ai, &pai);	//getaddrinfo()DNS查询服务
+	if ( iFuncStat!= 0) {		
+		printf("域名转ip失败, 错误代码：%d\n", iFuncStat);
+		system("pause");
+		exit(1);
+	}
+	CopyMemory(ip, &(pai->ai_addr->sa_data[2]), 4);
+	ip[4] = '\0';
+	mbstowcs_s(&returnValue, psu->ip, _countof(psu->ip), ip, _countof(psu->ip));		//
+
+	freeaddrinfo(pai);						//释放由getaddrinfo()内部为PADDRINFOA动态分配的内存
+	WSACleanup();
+	return 0;
+}
+
 /*
 *修改时间：2018-9-18
 *作者：zmx

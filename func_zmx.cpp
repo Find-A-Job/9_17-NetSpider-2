@@ -1,3 +1,4 @@
+#include "stdafx.h"
 #include "func_zmx.h"
 
 /*涉及到字符串的函数*/
@@ -271,7 +272,7 @@ int WriteLog_t(TCHAR *FileName, TCHAR *msg_t) {
 		fclose(FileWrite);
 		return -1;
 	}
-	iFuncStat = fwrite(msg, sizeof(char), strlen(msg), FileWrite);
+	iFuncStat = (int)fwrite(msg, sizeof(char), (int)strlen(msg), FileWrite);
 	if (iFuncStat > 0 && strlen(msg) == iFuncStat) {
 		//success
 	}

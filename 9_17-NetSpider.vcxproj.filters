@@ -27,12 +27,18 @@
     <ClInclude Include="Macro.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="func_zmx.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="9_17-NetSpider.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="func_zmx.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
