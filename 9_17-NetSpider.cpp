@@ -3,7 +3,7 @@
 
 #include "stdafx.h"
 #include "Macro.h"
-#include "func_zmx.h"
+//#include "func_zmx.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -98,7 +98,7 @@ int MainCommandLine(int argc, TCHAR **argv, TCHAR *URL) {
 /*
 *修改时间：2018-9-18
 *作者：zmx
-*参数：URL:接收URL字符串数组，'\0'结尾, psu:赋值结构体
+*参数：URL:接收URL字符串数组，'\0'结尾, psu:赋值结构体, pss文件后缀填充
 *功能：分析URL，赋值给结构体psu
 *备注：二次修改时间：2018-9-19，修改内容：1.增加提取各个部分的功能。2.提取出来的dir，没有前缀'/'，但是以后缀'/'结尾
 *		三次修改时间：2018-9-21，修改内容：增加形参pss，判断文件后缀。2.wcstombs_s()函数转换数值类字符串时，容易丢失'\0'后的数字，遂改动结构体
@@ -401,11 +401,16 @@ int MainMakeRequestHead(StructURL *psu, char *requestHead) {
 	char file[FILESIZE] = { NULL };
 	char domain[DOMAINSIZE] = { NULL };
 
+	size_t returnValue = 0;
+
 	/*...*/
 	//TCHAR 转 char
-	TcharToChar(psu->dirPath, _tcslen(psu->dirPath), dir);
-	TcharToChar(psu->file, _tcslen(psu->file), file);
-	TcharToChar(psu->domain, _tcslen(psu->domain), domain);
+	wcstombs_s(&returnValue, dir, _countof(dir), psu->dirPath, _countof(dir));
+	wcstombs_s(&returnValue, file, _countof(file), psu->file, _countof(file));
+	wcstombs_s(&returnValue, domain, _countof(domain), psu->domain, _countof(domain));
+	//TcharToChar(psu->dirPath, _tcslen(psu->dirPath), dir);
+	//TcharToChar(psu->file, _tcslen(psu->file), file);
+	//TcharToChar(psu->domain, _tcslen(psu->domain), domain);
 
 	sprintf_s(send_head, _countof(send_head), "GET /%s%s HTTP/1.1\r\n", dir, file);
 	sprintf_s(send_host, _countof(send_host), "Host: %s\r\n", domain);
@@ -498,12 +503,12 @@ int sendRecvSave(SOCKET cSock, char *requestHead, StructStore *pss) {
 	FILE *fileHead = NULL;
 	FILE *fileBody = NULL;
 	TCHAR msg_t[MSGSIZE] = { NULL };
-	char recvmsg[RECVSIZE] = { NULL };		//p2存放接收的字节
+	char recvmsg[RECVSIZE] = { NULL };		//存放接收的字节
 	unsigned long long totalData = 0;		//接收总字节数
 	unsigned long long actualData = 0;		//除去响应头的剩余部分
 	unsigned long long bodyData = 0;		//响应体数据长度
-	size_t sendLength = 0;					//p
-	int eachRecvLength = 0;					//s实际接收字节数
+	size_t sendLength = 0;					//
+	int eachRecvLength = 0;					//实际接收字节数
 	
 
 	/*...*/

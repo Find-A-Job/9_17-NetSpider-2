@@ -6,8 +6,8 @@
 #define FILENAMESIZE	256		//文件名数组长度
 #define URLSIZE			256		//URL数组长度
 #define MSGSIZE			256		//信息数组长度
-#define FILEPATHSIZE	512		//	
-#define FILETYPESIZE	16		//
+#define FILEPATHSIZE	512		//文件路径长度
+#define FILETYPESIZE	16		//文件后缀长度
 #define MSG512			512		//
 #define MSG1024			1024	//
 #define MSG2048			2048	//
@@ -32,7 +32,7 @@
 *备注：
 */
 
-/*结构体*/
+/*URL参数*/
 struct StructURL
 {
 	TCHAR protocalType[PROTOCALTYPESIZE];
@@ -47,7 +47,7 @@ struct StructURL
 	TCHAR anchor[ANCHORSIZE];
 };
 typedef StructURL *PStructURL;
-
+/*储存文件*/
 struct StructStore
 {
 	TCHAR fileName[FILEPATHSIZE];
