@@ -10,8 +10,9 @@
 /*主流程函数声明*/
 
 int MainCommandLine(int , TCHAR **, TCHAR *);
-int MainAnlyURL(TCHAR *, StructURL *);
+int MainAnlyURL(TCHAR *, StructURL *, StructStore *);
 int MainDomainToIp(StructURL *);
+int MainFilePathSet(StructStore *);
 int MainMakeRequestHead(StructURL *, char *);
 int MainConnectSendRecv(StructURL *, char *, StructStore *);
 
@@ -33,33 +34,24 @@ int _tmain(int argc, TCHAR **argv)
 	char ip[IPSIZE] = { NULL };
 	char port[PORTSIZE] = { NULL };
 
+	/*...*/
+	ZeroMemory(psu, sizeof(PStructURL));
+	ZeroMemory(pss, sizeof(PStructStore));
+
 	/*处理命令行参数*/
 	MainCommandLine(argc, argv, URL);
 
 	/*解析URL*/
-	MainAnlyURL(URL, psu);
+	MainAnlyURL(URL, psu, pss);
 
 	/*查询域名，转为ip地址*/
 	MainDomainToIp(psu);
 
+	/*文件路径设置*/
+	MainFilePathSet(pss);
+
 	/*制作请求头*/
 	MainMakeRequestHead(psu, requestHead);
-
-	wcstombs_s(&returnValue, ip, _countof(ip), psu->ip, _countof(ip));
-	wcstombs_s(&returnValue, port, _countof(port), psu->port, _countof(port));
-	wcstombs_s(&returnValue, msg, _countof(msg), psu->dirPath, _countof(msg));
-	printf("main:\n");
-	for (int i = 0; i < 4; ++i) {
-		printf("%u\t", (UCHAR)ip[i]);
-	}
-	printf("\n");
-	printf("main:\n");
-	printf("%s\n", requestHead);
-	//释放
-	free(psu);
-	free(pss);
-	system("pause");
-	return 0;
 
 	/*连接，发送请求头，接收并分离出响应头和响应体*/
 	MainConnectSendRecv(psu, requestHead, pss);
@@ -108,9 +100,10 @@ int MainCommandLine(int argc, TCHAR **argv, TCHAR *URL) {
 *作者：zmx
 *参数：URL:接收URL字符串数组，'\0'结尾, psu:赋值结构体
 *功能：分析URL，赋值给结构体psu
-*备注：二次修改时间：2018-9-19，修改内容：1.增加提取各个部分的功能。2.
+*备注：二次修改时间：2018-9-19，修改内容：1.增加提取各个部分的功能。2.提取出来的dir，没有前缀'/'，但是以后缀'/'结尾
+*		三次修改时间：2018-9-21，修改内容：增加形参pss，判断文件后缀。2.wcstombs_s()函数转换数值类字符串时，容易丢失'\0'后的数字，遂改动结构体
 */
-int MainAnlyURL(TCHAR *URL, StructURL *psu) {
+int MainAnlyURL(TCHAR *URL, StructURL *psu, StructStore *pss) {
 	/*内部变量*/
 	TCHAR msg_t[URLSIZE] = { NULL };
 	int coor_b = 0;							//关键字所在位置开始下标
@@ -119,6 +112,7 @@ int MainAnlyURL(TCHAR *URL, StructURL *psu) {
 
 	/*...*/
 	ZeroMemory(psu, sizeof(StructURL));		//初始化结构体内存
+	ZeroMemory(pss, sizeof(PStructStore));
 
 	/*提取协议部分*/
 	coor_b = 0;
@@ -224,7 +218,17 @@ int MainAnlyURL(TCHAR *URL, StructURL *psu) {
 				coor_e = i;
 				continue;
 			}
-			if ('.' == URL[i] || '?' == URL[i] || '#' == URL[i]) {			//发现文件名部分, 参数部分， 锚部分，退出循环
+			if ('.' == URL[i]) {							//提取后缀
+				for (int j = i + 1; URL[j] != '\0';++j) {
+					pss->fileBodyType[j - i - 1] = URL[j];
+					if ('\0' == URL[j + 1]) {
+						pss->fileBodyType[j - i] = '\0';
+						break;
+					}
+				}
+				break;
+			}
+			if ('?' == URL[i] || '#' == URL[i]) {			//发现文件名部分, 参数部分， 锚部分，退出循环
 				break;
 			}
 			if ('\0' == URL[i + 1]) {
@@ -291,6 +295,14 @@ int MainAnlyURL(TCHAR *URL, StructURL *psu) {
 	else {					//未发现起始标识
 		(psu->file)[0] = '\0';
 	}
+	//文件类型判断
+	if ((psu->file)[0] != '\0') {
+		_stprintf_s(pss->fileHeadType, _countof(pss->fileHeadType), _T("txt"));
+	}
+	else {
+		_stprintf_s(pss->fileHeadType, _countof(pss->fileHeadType), _T("txt"));
+		_stprintf_s(pss->fileBodyType, _countof(pss->fileBodyType), _T("html"));
+	}
 
 	printf("URL分析完毕\n");
 	return 0;
@@ -327,7 +339,6 @@ int MainDomainToIp(StructURL *psu) {
 	}
 	wcstombs_s(&returnValue, domain, _countof(domain), psu->domain, _countof(domain));
 	wcstombs_s(&returnValue, port, _countof(port), psu->port, _countof(port));
-
 	ZeroMemory(&ai, sizeof(ai));
 	ai.ai_socktype = SOCK_STREAM;
 	ai.ai_family = AF_INET;
@@ -337,12 +348,34 @@ int MainDomainToIp(StructURL *psu) {
 		system("pause");
 		exit(1);
 	}
-	CopyMemory(ip, &(pai->ai_addr->sa_data[2]), 4);
-	ip[4] = '\0';
-	mbstowcs_s(&returnValue, psu->ip, _countof(psu->ip), ip, _countof(psu->ip));		//
+	psu->ul_ip = ((sockaddr_in *)(pai->ai_addr))->sin_addr.S_un.S_addr;
+	psu->us_port = ((sockaddr_in *)(pai->ai_addr))->sin_port;;
 
 	freeaddrinfo(pai);						//释放由getaddrinfo()内部为PADDRINFOA动态分配的内存
 	WSACleanup();
+	printf("域名转ip完成\n");
+	return 0;
+}
+
+/*
+*修改时间：2018-9-21
+*作者：zmx
+*参数：pss:文件路径结构体
+*功能：配置文件路径
+*备注：
+*/
+int MainFilePathSet(StructStore *pss) {
+	/*内部变量*/
+	time_t time_now = 0;
+	char requestHead[FILEPATHSIZE] = { NULL };
+	char requestBody[FILEPATHSIZE] = { NULL };
+
+	/*...*/
+	CreateDirectory(_T("Data"), NULL);
+	time(&time_now);
+	_stprintf_s(pss->requestHead, _countof(requestHead), _T("Data/%llu.%s"), time_now, pss->fileHeadType);
+	_stprintf_s(pss->requestBody, _countof(requestBody), _T("Data/%llu.%s"), time_now, pss->fileBodyType);
+
 	return 0;
 }
 
@@ -385,7 +418,7 @@ int MainMakeRequestHead(StructURL *psu, char *requestHead) {
 
 	sprintf_s(requestHead, MSG2048, "%s%s%s%s%s%s%s%s", send_head, send_host, send_agent, send_language, send_encoding, send_connection, send_cache, send_ending);
 
-	_tprintf(_T("请求头制作完毕完毕\n"));
+	printf("请求头制作完毕\n");
 	return 0;
 }
 /*
@@ -401,6 +434,8 @@ int MainConnectSendRecv(StructURL *psu, char *requestHead, StructStore *pss) {
 	char ip[IPSIZE] = { NULL };
 	char port[PORTSIZE] = { NULL };
 	SOCKET cSock = NULL;
+	size_t returnValue = 0;
+	sockaddr caddre;
 
 	/*...*/
 	//socket初始化
@@ -422,13 +457,11 @@ int MainConnectSendRecv(StructURL *psu, char *requestHead, StructStore *pss) {
 		exit(1);
 	}
 	//建立连接  需要ULONG类型的ip和USHORT类型的port
-	TcharToChar(psu->ip, _tcslen(psu->ip), ip);
-	TcharToChar(psu->port, _tcslen(psu->port), port);
-	sockaddr caddre;
 	ZeroMemory(&caddre, sizeof(caddre));
-	((sockaddr_in *)&caddre)->sin_addr.S_un.S_addr = *((ULONG *)ip[0]);		//字节序问题
-	((sockaddr_in *)&caddre)->sin_port = *((USHORT *)port[0]);				//字节序问题
+	((sockaddr_in *)&caddre)->sin_addr.S_un.S_addr = psu->ul_ip;		//字节序问题
+	((sockaddr_in *)&caddre)->sin_port = psu->us_port;				//字节序问题
 	caddre.sa_family = AF_INET;
+
 	if (SOCKET_ERROR == connect(cSock, &caddre, sizeof(caddre))) {
 		_stprintf_s(msg_t, 256, _T("connect error, GetLastError:%lu, errno:%d\n"), GetLastError(), errno);
 		_tprintf_s(msg_t);
@@ -445,10 +478,12 @@ int MainConnectSendRecv(StructURL *psu, char *requestHead, StructStore *pss) {
 	int time_out_recv = 2000;	//超时时间（毫秒）
 	setsockopt(cSock, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_out_recv, sizeof(int));		//设置接收超时返回
 
-
 	/*收发存储分离*/
 	sendRecvSave(cSock, requestHead, pss);
 
+	shutdown(cSock, SD_SEND);
+	closesocket(cSock);
+	WSACleanup();
 	return 0;
 }
 /*
@@ -489,6 +524,7 @@ int sendRecvSave(SOCKET cSock, char *requestHead, StructStore *pss) {
 
 	if (strlen(requestHead) == sendLength) {									//判断所有信息是否发送正常
 		eachRecvLength = recv(cSock, recvmsg, RECVSIZE, 0);						//接收响应
+		printf("正在接收.");	//打印'.'，表示正在接收
 		if (-1 == eachRecvLength) {				//接收异常
 			_stprintf_s(msg_t, _countof(msg_t), _T("recv err, WSAGETLASTERROR:%d\n"), WSAGetLastError());
 			_tprintf(msg_t);
@@ -506,7 +542,7 @@ int sendRecvSave(SOCKET cSock, char *requestHead, StructStore *pss) {
 				if ('\r' == recvmsg[i] && '\n' == recvmsg[i + 1] && '\r' == recvmsg[i + 2] && '\n' == recvmsg[i + 3]) {
 					actualData += (eachRecvLength - 4 - i);											//接收总字节数-响应头字节数
 					fwrite(recvmsg, sizeof(char), i + 3 + 1, fileHead);								//响应头写入文件
-					fwrite(recvmsg, sizeof(char), eachRecvLength - (i + 3 + 1), fileBody);			//响应体部分写入文件
+					fwrite(&recvmsg[i + 3 + 1], sizeof(char), eachRecvLength - (i + 3 + 1), fileBody);			//响应体部分写入文件
 					break;
 				}
 
@@ -527,18 +563,23 @@ int sendRecvSave(SOCKET cSock, char *requestHead, StructStore *pss) {
 		}
 		if (eachRecvLength == RECVSIZE) {				//接收长度与预期一致，可能还有后续数据
 			eachRecvLength = recv(cSock, recvmsg, RECVSIZE, 0);						//接收响应
+			printf(".");	//打印'.'，表示正在接收
 			while (-1 != eachRecvLength) {											//
+				if (0 == eachRecvLength) {
+					break;
+				}
 				totalData += eachRecvLength;										//总量计数
 				fwrite(recvmsg, sizeof(char), eachRecvLength, fileBody);			//响应体写入文件
+				eachRecvLength = recv(cSock, recvmsg, RECVSIZE, 0);					//接收响应
 			}
 		}
 	}
+	
 	//
 	fclose(fileHead);
 	fclose(fileBody);
-	shutdown(cSock, SD_SEND);
-	closesocket(cSock);
-	WSACleanup();
 	//
+	printf("\n");
+	printf("接收完毕\n");
 	return 0;
 }

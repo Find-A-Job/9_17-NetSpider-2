@@ -7,6 +7,7 @@
 #define URLSIZE			256		//URL数组长度
 #define MSGSIZE			256		//信息数组长度
 #define FILEPATHSIZE	512		//	
+#define FILETYPESIZE	16		//
 #define MSG512			512		//
 #define MSG1024			1024	//
 #define MSG2048			2048	//
@@ -37,7 +38,9 @@ struct StructURL
 	TCHAR protocalType[PROTOCALTYPESIZE];
 	TCHAR domain[DOMAINSIZE];
 	TCHAR ip[IPSIZE];
+	ULONG ul_ip;
 	TCHAR port[PORTSIZE];
+	USHORT us_port;
 	TCHAR dirPath[DIRSIZE];
 	TCHAR file[FILESIZE];
 	TCHAR argv[ARGVSIZE];
@@ -48,7 +51,9 @@ typedef StructURL *PStructURL;
 struct StructStore
 {
 	TCHAR fileName[FILEPATHSIZE];
+	TCHAR fileHeadType[FILETYPESIZE];
 	TCHAR requestHead[FILEPATHSIZE];
+	TCHAR fileBodyType[FILETYPESIZE];
 	TCHAR requestBody[FILEPATHSIZE];
 };
 typedef StructStore *PStructStore;

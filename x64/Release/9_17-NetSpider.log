@@ -1,8 +1,8 @@
 ﻿  9_17-NetSpider.cpp
   正在生成代码
-  2 of 21 functions ( 9.5%) were compiled, the rest were copied from previous compilation.
+  2 of 23 functions ( 8.7%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    0 functions had inline decision re-evaluated but remain unchanged
+    5 functions had inline decision re-evaluated but remain unchanged
   已完成代码的生成
   9_17-NetSpider.vcxproj -> D:\vs2015\4-程序\9_17-NetSpider\x64\Release\9_17-NetSpider.exe
   9_17-NetSpider.vcxproj -> D:\vs2015\4-程序\9_17-NetSpider\x64\Release\9_17-NetSpider.pdb (Full PDB)
